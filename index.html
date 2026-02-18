@@ -1,0 +1,161 @@
+import { useState } from "react";
+
+const people = [
+  "Abha Gupta Varma","Shelbee Axsom-Anderson","Monica Frias","Paula Englin","Meredith Nieuwsma",
+  "Kristen Yeh","Karen George","Kristy Kieda","Jodi Center","Brittany Veenkant",
+  "Jamey Bailey","Cari Porter","Ginger Feldman","Susan Barnhart","Angie Korzeniewski",
+  "Sushma Shenoy","Geri Wingo","Courtney Currie","Lindsay Wesley","Debbie Herrington",
+  "Leslie Stolz","Derraleigh Jackson","Amy Thomas-Mellema","Elizabeth Corwin","Colleen McInerney",
+  "Shalon Dailey","Krista Kurth","Julia Weston","Madelaine Lane","Christy Glisson",
+  "Allie Overbeek","Susan Golder","Michelle Burke","Brandy Lovelady Mitchell","Brandias Bergsma",
+  "Vivian Termaat","Jess McKissick","Brandi King","Hannah Staal","Liz McVoy",
+  "Mina Stallworth","Carly Lindstrom","Sharon Vriend-Robinette","Chelsie Wyse","Kaylah McKinney",
+  "Amy Day","Marie Revenew","Angela Visbeen","Mary Gunther","Victoria Johnson",
+  "Taya Koetsier","Shaina Lane","Teresa Esshaki","Polina Andrushchenko","Kim Moran",
+  "Dana Hebreard","Christy Keizer","Anna Baeten","Christa Bird","Taya",
+  "Sophia Moran","Meghan Barnhart","Zoe Guthrie","Amy Oostveen","Susan Schwallie",
+  "Cait Wisniewski","Nuabode Properties","Guest 1","Guest 2","Guest 3",
+  "Guest 4","Jessica Collette","Darline Radamaker"
+];
+
+// 73 people, 10 groups -> 3 groups of 8, 7 groups of 7 per round (3*8 + 7*7 = 24+49 = 73)
+// Build 3 rounds with minimal overlap using a proper round-robin style shuffle
+
+function buildRounds(people, numGroups, numRounds) {
+  const n = people.length;
+  const rounds = [];
+
+  // We'll use different stride/offset strategies for each round
+  // Round 0: assign by index mod 10 (0,1,2,...,9,0,1,...)
+  // Round 1: assign by index * 3 mod 10 (spread differently)
+  // Round 2: assign by index * 7 mod 10
+
+  // But stride must ensure all groups get members - use block + rotation approach
+  // Better: shuffle the indices differently each round
+
+  // Round 0: natural order grouped in blocks
+  // Round 1: interleave differently - assign person i to group floor(i*10/n)
+  // Actually let's use a well-known social golfer approach:
+  // Assign each person a fixed index 0..72
+  // Round r: group = (i + r * offset) % 10, but ensure good spread
+
+  // Use 3 distinct permutations
+  const perms = [
+    // Round 1: 0..72 in order, group = i % 10
+    Array.from({length: n}, (_, i) => i),
+    // Round 2: interleave - every 10th person goes together
+    // person at position i goes to group (floor(i/10) + i%10 * ceil(n/10)) - complex
+    // simpler: reverse the two "digits"
+    Array.from({length: n}, (_, i) => {
+      const row = i % 10;
+      const col = Math.floor(i / 10);
+      return row * Math.ceil(n / 10) + col;
+    }).map((mapped, i, arr) => {
+      // This gives us a different index - we want the person at that index
+      return mapped < n ? mapped : i;
+    }),
+    // Round 3: a third permutation - diagonal
+    Array.from({length: n}, (_, i) => {
+      const row = i % 8;
+      const col = Math.floor(i / 8);
+      const newIdx = col + row * Math.ceil(n / 8);
+      return newIdx < n ? newIdx : i;
+    }),
+  ];
+
+  for (let r = 0; r < numRounds; r++) {
+    const groups = Array.from({length: numGroups}, () => []);
+    const perm = perms[r];
+    // Assign each person based on their position in this round's permutation
+    // Build inverse: for each position in perm, assign to group
+    const assigned = new Array(n).fill(-1);
+    // sort people by perm value, then assign sequentially to groups
+    const order = Array.from({length: n}, (_, i) => i).sort((a, b) => perm[a] - perm[b]);
+    order.forEach((personIdx, pos) => {
+      groups[pos % numGroups].push(people[personIdx]);
+    });
+    rounds.push(groups);
+  }
+  return rounds;
+}
+
+const rounds = buildRounds(people, 10, 3);
+
+const groupNames = ["Group 1","Group 2","Group 3","Group 4","Group 5","Group 6","Group 7","Group 8","Group 9","Group 10"];
+
+const colors = [
+  "bg-blue-50 border-blue-300",
+  "bg-green-50 border-green-300",
+  "bg-purple-50 border-purple-300",
+  "bg-yellow-50 border-yellow-300",
+  "bg-red-50 border-red-300",
+  "bg-pink-50 border-pink-300",
+  "bg-indigo-50 border-indigo-300",
+  "bg-orange-50 border-orange-300",
+  "bg-teal-50 border-teal-300",
+  "bg-cyan-50 border-cyan-300",
+];
+
+const headerColors = [
+  "bg-blue-400","bg-green-400","bg-purple-400","bg-yellow-400","bg-red-400",
+  "bg-pink-400","bg-indigo-400","bg-orange-400","bg-teal-400","bg-cyan-400"
+];
+
+export default function App() {
+  const [activeRound, setActiveRound] = useState(0);
+
+  // Compute overlap stats
+  function getOverlapStats() {
+    let totalOverlap = 0;
+    let pairs = {};
+    for (let r = 0; r < 3; r++) {
+      for (let g = 0; g < 10; g++) {
+        const members = rounds[r][g];
+        for (let a = 0; a < members.length; a++) {
+          for (let b = a+1; b < members.length; b++) {
+            const key = [members[a], members[b]].sort().join('|||');
+            pairs[key] = (pairs[key] || 0) + 1;
+          }
+        }
+      }
+    }
+    const repeated = Object.values(pairs).filter(v => v > 1).length;
+    return repeated;
+  }
+
+  const overlaps = getOverlapStats();
+
+  return (
+    <div className="p-4 max-w-6xl mx-auto font-sans">
+      <h1 className="text-2xl font-bold text-center mb-1">Group Assignments</h1>
+      <p className="text-center text-gray-500 mb-1 text-sm">73 people · 10 groups · 3 rounds</p>
+      <p className="text-center text-gray-400 mb-4 text-xs">Repeated pairings across all rounds: {overlaps}</p>
+
+      <div className="flex justify-center gap-3 mb-6">
+        {[0,1,2].map(r => (
+          <button key={r} onClick={() => setActiveRound(r)}
+            className={`px-6 py-2 rounded-full font-semibold border-2 transition-all ${
+              activeRound===r ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+            }`}>
+            Round {r+1}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        {rounds[activeRound].map((group, gi) => (
+          <div key={gi} className={`rounded-xl border-2 overflow-hidden ${colors[gi]}`}>
+            <div className={`${headerColors[gi]} text-white text-center text-sm font-bold py-1.5`}>
+              Group {gi+1} <span className="font-normal opacity-80">({group.length})</span>
+            </div>
+            <ul className="p-2 space-y-1">
+              {group.map((p, pi) => (
+                <li key={pi} className="text-xs bg-white bg-opacity-60 rounded px-2 py-1" title={p}>{p}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
